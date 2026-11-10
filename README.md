@@ -2,7 +2,7 @@
 
 เว็บแอปพลิเคชัน Flask สำหรับคำนวณ **DC Operating Point** ของวงจรขยาย BJT
 NPN Common Emitter แบบ **Voltage-Divider Bias** ภายใต้สมมติฐาน Forward-Active
-(β คงที่, VBE คงที่)
+(β คงที่, VBE คงที่) คำนวณด้วยวิธี Thevenin (คิดกระแสเบสผ่าน `RTH`)
 
 Lab 02 · Computer Programming for Electrical Engineers · 2/2569
 
@@ -13,7 +13,7 @@ Lab 02 · Computer Programming for Electrical Engineers · 2/2569
 - รับค่า `VCC, R1, R2, RC, RE, β, VBE` ผ่านฟอร์มบนเว็บ
 - คำนวณด้วย Python backend (`dc_bias.py`) ไม่ใช่ตัวเลขที่เขียนค้างใน HTML
 - แสดง `VB, VE, VC, VCE, IC, IB, IE` พร้อมหน่วย และบล็อก "ขั้นตอนคำนวณ"
-  (`VTH, RTH, IB, IE`) สำหรับคัดลอกลงสมุด
+  (`VTH, RTH, IB, IC, IE, VE, VB, VC, VCE`) สำหรับคัดลอกลงสมุด
 - ตรวจสอบข้อมูลเข้าและแจ้ง error ภาษาไทยทีละช่อง
 - เตือนเมื่อวงจรอยู่นอกช่วง Forward-Active (Cutoff / Saturation)
 
@@ -51,9 +51,8 @@ python3 -m venv .venv
 .venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-ต้องได้ **39 tests ... OK** — 23 engineering tests ใน `test_dc_bias.py`
-(7 การแปลงหน่วย, 10 validation, 6 solver) และ 16 HTTP tests ใน `test_web.py`
-(8 route, 8 presentation)
+ต้องได้ **46 tests ... OK** — 23 engineering tests ใน `test_dc_bias.py`
+(7 การแปลงหน่วย, 10 validation, 6 solver) และ 23 HTTP tests ใน `test_web.py`
 
 ## การกรอกค่า
 
@@ -71,7 +70,7 @@ python3 -m venv .venv
 
 ## แบบจำลองและข้อจำกัด
 
-สมการที่ใช้:
+สมการที่ใช้ (วิธี Thevenin):
 
 ```
 VTH = VCC · R2 / (R1 + R2)
@@ -84,6 +83,18 @@ VB  = VE + VBE
 VC  = VCC − IC · RC
 VCE = VC − VE
 ```
+
+ค่าที่ได้กับค่าอุปกรณ์ตัวอย่าง (12 V, 100k, 22k, 2.2k, 1k, β=100, VBE=0.70 V):
+
+| ปริมาณ | ค่า |
+|---|---|
+| VB | 1.942 V |
+| VE | 1.242 V |
+| VC | 9.294 V |
+| VCE | 8.052 V |
+| IC | 1.230 mA |
+| IB | 12.30 µA |
+| IE | 1.242 mA |
 
 - **Cutoff** (`VTH ≤ VBE`): กระแสเป็นศูนย์, `VC = VCC` — แบบจำลอง Forward-Active ใช้ไม่ได้
 - **Saturation** (`VCE ≤ 0.3 V`): ตัวเลขยังแสดง แต่มาจากสมการ Forward-Active

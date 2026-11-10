@@ -144,9 +144,16 @@
 
       <div class="steps">
         <p class="steps-title">ขั้นตอนคำนวณ</p>VTH = VCC · R2 / (R1 + R2)     = {{ '%.3f'|format(result.vth) }} V
-RTH = R1 ∥ R2                  = {{ '%.2f'|format(result.rth / 1000) }} kΩ
+{% if result.region == 'cutoff' %}VTH ≤ VBE  ({{ '%.3f'|format(result.vth) }} ≤ {{ '%.3f'|format(values.vbe|float) }} V) → Cutoff (รอยต่อ B–E ไม่นำ)
+IB  = 0                        = {{ '%.2f'|format(result.ib * 1e6) }} µA
+IE  = 0                        = {{ '%.3f'|format(result.ie * 1000) }} mA{% else %}RTH = R1 ∥ R2                  = {{ '%.2f'|format(result.rth / 1000) }} kΩ
 IB  = (VTH − VBE) / (RTH + (β+1)·RE) = {{ '%.2f'|format(result.ib * 1e6) }} µA
-IE  = (β + 1) · IB             = {{ '%.3f'|format(result.ie * 1000) }} mA</div>
+IC  = β · IB                   = {{ '%.3f'|format(result.ic * 1000) }} mA
+IE  = (β + 1) · IB             = {{ '%.3f'|format(result.ie * 1000) }} mA
+VE  = IE · RE                  = {{ '%.3f'|format(result.ve) }} V
+VB  = VE + VBE                 = {{ '%.3f'|format(result.vb) }} V
+VC  = VCC − IC · RC            = {{ '%.3f'|format(result.vc) }} V
+VCE = VC − VE                  = {{ '%.3f'|format(result.vce) }} V{% endif %}</div>
 
       {% if result.notes %}
       <ul class="notes">
@@ -160,7 +167,7 @@ IE  = (β + 1) · IB             = {{ '%.3f'|format(result.ie * 1000) }} mA</div
     </section>
   </div>
 
-  <p class="assumptions">แบบจำลอง: β คงที่ · VBE คงที่ · Forward-Active — ผลที่ได้ใช้ได้เฉพาะเมื่อวงจรอยู่ในช่วง Active</p>
+  <p class="assumptions">แบบจำลอง: คิดกระแสเบสผ่าน Thevenin (RTH, VTH) · β คงที่ · VBE คงที่ · Forward-Active — ผลที่ได้ใช้ได้เฉพาะเมื่อวงจรอยู่ในช่วง Active</p>
 </div>
 </body>
 </html>

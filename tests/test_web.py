@@ -25,7 +25,7 @@ class WebTests(unittest.TestCase):
         resp = self.client.post("/", data=SAMPLE_FORM)
         self.assertEqual(resp.status_code, 200)
         html = resp.get_data(as_text=True)
-        for value in ("1.942", "1.242", "9.294", "8.052", "1.230"):
+        for value in ("1.942", "1.242", "9.294", "8.052", "12.30"):
             self.assertIn(value, html)
 
     def test_post_zero_resistance_shows_error(self):
@@ -88,7 +88,20 @@ class PresentationTests(unittest.TestCase):
         html = self.client.post("/", data=SAMPLE_FORM).get_data(as_text=True)
         self.assertIn("ขั้นตอนคำนวณ", html)
         self.assertIn("VTH", html)
-        self.assertIn("RTH", html)
+        self.assertIn("RTH =", html)
+
+    def test_steps_compute_vc_before_vce(self):
+        html = self.client.post("/", data=SAMPLE_FORM).get_data(as_text=True)
+        block = self.steps_block(html)
+        self.assertIn("VC  = VCC − IC · RC", block)
+        self.assertIn("9.294", block)
+
+    def test_no_method_picker_on_page(self):
+        for html in (self.client.get("/").get_data(as_text=True),
+                     self.client.post("/", data=SAMPLE_FORM).get_data(as_text=True)):
+            self.assertNotIn('name="method"', html)
+            self.assertNotIn("วิธีประมาณ", html)
+            self.assertNotIn("method-picker", html)
 
     def test_results_table_has_units(self):
         html = self.client.post("/", data=SAMPLE_FORM).get_data(as_text=True)
@@ -102,6 +115,43 @@ class PresentationTests(unittest.TestCase):
     def test_no_result_layout_marker_on_get(self):
         html = self.client.get("/").get_data(as_text=True)
         self.assertNotIn("layout--result", html)
+
+    # --- steps block must never print a formula that disagrees with its own value ---
+    #
+    # In cutoff the junction is off: IB is zero because VTH <= VBE, not because
+    # the forward-active expression happens to evaluate to zero. Printing
+    # "(VTH - VBE) / (RTH + (beta+1)RE) = 0.00 uA" next to VTH = 0.119 V and
+    # VBE = 0.70 V tells the reader the formula gives 0.00 when it gives -5.70.
+    FORWARD_ACTIVE_IB = "RTH + (β+1)·RE"
+
+    def steps_block(self, html):
+        start = html.index('<div class="steps">')
+        return html[start:html.index("</div>", start)]
+
+    def test_cutoff_steps_do_not_apply_the_forward_active_formula(self):
+        html = self.client.post("/", data=dict(SAMPLE_FORM, r2="1k")).get_data(as_text=True)
+        self.assertNotIn(self.FORWARD_ACTIVE_IB, self.steps_block(html))
+
+    def test_cutoff_steps_state_the_reason_and_the_zero_current(self):
+        html = self.client.post("/", data=dict(SAMPLE_FORM, r2="1k")).get_data(as_text=True)
+        block = self.steps_block(html)
+        self.assertIn("Cutoff", block)
+        self.assertIn("VTH ≤ VBE", block)
+        self.assertIn("0.00 µA", block)
+
+    def test_cutoff_steps_still_report_vth(self):
+        html = self.client.post("/", data=dict(SAMPLE_FORM, r2="1k")).get_data(as_text=True)
+        block = self.steps_block(html)
+        self.assertIn("VTH", block)
+        self.assertIn("0.119", block)          # VTH for R2 = 1k
+
+    def test_active_steps_keep_the_forward_active_formula(self):
+        html = self.client.post("/", data=SAMPLE_FORM).get_data(as_text=True)
+        self.assertIn(self.FORWARD_ACTIVE_IB, self.steps_block(html))
+
+    def test_saturation_steps_keep_the_forward_active_formula(self):
+        html = self.client.post("/", data=dict(SAMPLE_FORM, rc="10k")).get_data(as_text=True)
+        self.assertIn(self.FORWARD_ACTIVE_IB, self.steps_block(html))
 
 
 if __name__ == "__main__":

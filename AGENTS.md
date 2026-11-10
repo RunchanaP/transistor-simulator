@@ -7,6 +7,9 @@
 - `app.py` owns routing and display formatting only. No physics arithmetic here.
 - `templates/` owns presentation. It must never contain a physics equation.
 - `static/style.css` owns appearance. No external fonts, CDNs, or JS.
+- `dc_bias.py` solves one model only: the Thevenin equivalent with base current
+  included (`IB = (VTH − VBE) / (RTH + (β+1)·RE)`). There is no approximate or
+  base-current-neglected variant, and no method switch in the UI.
 
 ## Rules
 
@@ -26,6 +29,10 @@
    these.
 8. **The agent does not run `git commit` or `git push`.** The student commits in GitHub
    Desktop so they can explain the history.
+9. Region classification lives in `solve_dc_bias()`, not in the template:
+   `VTH ≤ VBE` → cutoff, otherwise `VCE ≤ 0.3` → saturation.
+10. The steps block must show the formula that produced the number next to it, and
+    every quantity in the results table must appear in the steps block.
 
 ## Scope
 

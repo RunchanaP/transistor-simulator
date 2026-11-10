@@ -3,6 +3,8 @@
 การตรวจสอบผลลัพธ์เทียบกับ **การคำนวณมือที่เป็นอิสระจากตัวโปรแกรม**
 (คำนวณก่อนเขียนโค้ด จากสมการใน design doc §7.5)
 
+แบบจำลองที่ใช้มีชุดเดียว: **วิธี Thevenin (คิดกระแสเบสผ่าน `RTH`)**
+
 ## 1. ค่าอุปกรณ์ตัวอย่าง
 
 ```
@@ -53,7 +55,7 @@ VCE = 9.294312 − 1.242157                              = 8.052155 V
 | A3 | ค่าตรงกับการคำนวณอิสระ | ตารางข้อ 3 + `test_reference_operating_point` |
 | A4 | `R≤0`, `β≤0`, ค่าที่ไม่ใช่ตัวเลข → error ชัดเจน หน้าไม่ล้ม | `test_post_zero_resistance_shows_error`, `test_post_thai_text_shows_error`, `test_post_missing_field_shows_error` — ทั้งหมดได้ HTTP 200 |
 | A5 | เตือน Cutoff / Saturation | `test_cutoff_shows_warning_bar`, `test_saturation_shows_warning_bar`, `test_cutoff_at_exact_boundary` |
-| A6 | ≥3 engineering tests + ≥1 Flask client test | 23 tests ใน `test_dc_bias.py` (engineering) + 16 tests ใน `test_web.py` (HTTP) |
+| A6 | ≥3 engineering tests + ≥1 Flask client test | 23 tests ใน `test_dc_bias.py` (engineering) + 23 tests ใน `test_web.py` (HTTP) |
 | A7 | clone แล้วรันได้ตาม README | หัวข้อติดตั้ง/รัน/ทดสอบใน `README.md` ใช้คำสั่งเดียวกับที่รันจริง |
 
 ## 5. Test log (รันจริง)
@@ -85,12 +87,19 @@ test_reference_operating_point ... ok
 test_saturation_warning_when_vce_low ... ok
 test_unusual_vbe_goes_to_notes_not_warnings ... ok
 test_active_region_shows_green_pill ... ok
+test_active_steps_keep_the_forward_active_formula ... ok
 test_calculation_steps_are_shown ... ok
 test_cutoff_shows_warning_bar ... ok
+test_cutoff_steps_do_not_apply_the_forward_active_formula ... ok
+test_cutoff_steps_state_the_reason_and_the_zero_current ... ok
+test_cutoff_steps_still_report_vth ... ok
+test_no_method_picker_on_page ... ok
 test_no_result_layout_marker_on_get ... ok
 test_result_layout_marker_after_post ... ok
 test_results_table_has_units ... ok
 test_saturation_shows_warning_bar ... ok
+test_saturation_steps_keep_the_forward_active_formula ... ok
+test_steps_compute_vc_before_vce ... ok
 test_stylesheet_is_linked ... ok
 test_get_index_returns_form ... ok
 test_post_missing_field_shows_error ... ok
@@ -102,7 +111,7 @@ test_post_very_long_input_does_not_crash ... ok
 test_post_zero_resistance_shows_error ... ok
 
 ----------------------------------------------------------------------
-Ran 39 tests in 0.070s
+Ran 46 tests in 0.046s
 
 OK
 ```
@@ -111,8 +120,8 @@ OK
 
 | กรอก | ผลที่เห็น |
 |---|---|
-| ค่าตัวอย่าง (12 / 100k / 22k / 2.2k / 1k / 100 / 0.7) | VB 1.942 V · VCE 8.052 V · ✅ Forward-Active |
+| ค่าตัวอย่าง (12 / 100k / 22k / 2.2k / 1k / 100 / 0.7) | VB 1.942 V · VE 1.242 V · VCE 8.052 V · IC 1.230 mA · ✅ Forward-Active; บล็อกขั้นตอนคำนวณมี `RTH`, `VC = VCC − IC·RC` |
 | `RC = 10k` | ตัวเลขยังแสดง แต่มีแถบเตือนสีส้มเรื่อง VCE ต่ำกว่า VCE(sat) |
-| `R2 = 1k` | แถบเตือน Cutoff (VTH ≤ VBE) |
+| `R2 = 1k` | แถบเตือน Cutoff (VTH ≤ VBE) — บล็อกขั้นตอนคำนวณระบุ `VTH ≤ VBE → Cutoff` และ `IB = 0` แทนสูตร Forward-Active |
 | `R1 = 0` | กล่อง error แดง "ค่าความต้านทานต้องมากกว่า 0" หน้าไม่ล้ม |
 | `R1 = หนึ่งร้อย` | กล่อง error "กรุณากรอกตัวเลข" |
