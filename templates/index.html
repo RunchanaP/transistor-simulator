@@ -3,16 +3,76 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BJT DC Bias Calculator — Voltage-Divider Bias</title>
+  <title>BJT DC Bias Calculator — {% if mode == 'fixed' %}Fixed Bias{% elif mode == 'emitter' %}Emitter Bias{% else %}Voltage-Divider Bias{% endif %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 <div class="card">
   <header class="card-header">
     <h1>BJT DC Bias Calculator</h1>
-    <p>Voltage-Divider Bias · NPN Common Emitter</p>
+    <p>{% if mode == 'fixed' %}Fixed Bias{% elif mode == 'emitter' %}Emitter Bias · Single Supply{% else %}Voltage-Divider Bias{% endif %} · NPN Common Emitter</p>
   </header>
 
+  {% if mode == 'fixed' %}
+  <figure class="schematic" aria-hidden="true">
+    <svg viewBox="0 0 360 250" xmlns="http://www.w3.org/2000/svg">
+      <g fill="none" stroke="#17344b" stroke-width="2" stroke-linecap="round">
+        <line x1="30" y1="30" x2="330" y2="30"/>
+        <line x1="103" y1="30" x2="103" y2="55"/>
+        <rect x="92" y="55" width="22" height="45" fill="#fff"/>
+        <line x1="103" y1="100" x2="103" y2="130"/>
+        <line x1="103" y1="130" x2="176" y2="130"/>
+        <line x1="176" y1="112" x2="176" y2="148"/>
+        <circle cx="200" cy="130" r="30" fill="#fff"/>
+        <line x1="176" y1="120" x2="207" y2="100"/>
+        <line x1="176" y1="140" x2="207" y2="160"/>
+        <line x1="207" y1="100" x2="207" y2="78"/>
+        <rect x="196" y="43" width="22" height="35" fill="#fff"/>
+        <line x1="207" y1="30" x2="207" y2="43"/>
+        <line x1="207" y1="160" x2="207" y2="240"/>
+        <line x1="192" y1="240" x2="222" y2="240"/>
+      </g>
+      <g fill="#546d83" font-family="Consolas, Menlo, monospace" font-size="12">
+        <text x="34" y="22">VCC</text>
+        <text x="120" y="82">RB</text>
+        <text x="224" y="66">RC</text>
+        <text x="234" y="124">Q1</text>
+        <text x="140" y="122">B</text>
+      </g>
+    </svg>
+  </figure>
+  {% elif mode == 'emitter' %}
+  <figure class="schematic" aria-hidden="true">
+    <svg viewBox="0 0 360 250" xmlns="http://www.w3.org/2000/svg">
+      <g fill="none" stroke="#17344b" stroke-width="2" stroke-linecap="round">
+        <line x1="30" y1="30" x2="330" y2="30"/>
+        <line x1="103" y1="30" x2="103" y2="55"/>
+        <rect x="92" y="55" width="22" height="45" fill="#fff"/>
+        <line x1="103" y1="100" x2="103" y2="130"/>
+        <line x1="103" y1="130" x2="176" y2="130"/>
+        <line x1="176" y1="112" x2="176" y2="148"/>
+        <circle cx="200" cy="130" r="30" fill="#fff"/>
+        <line x1="176" y1="120" x2="207" y2="100"/>
+        <line x1="176" y1="140" x2="207" y2="160"/>
+        <line x1="207" y1="100" x2="207" y2="78"/>
+        <rect x="196" y="43" width="22" height="35" fill="#fff"/>
+        <line x1="207" y1="30" x2="207" y2="43"/>
+        <line x1="207" y1="160" x2="207" y2="182"/>
+        <rect x="196" y="182" width="22" height="35" fill="#fff"/>
+        <line x1="207" y1="217" x2="207" y2="240"/>
+        <line x1="192" y1="240" x2="222" y2="240"/>
+      </g>
+      <g fill="#546d83" font-family="Consolas, Menlo, monospace" font-size="12">
+        <text x="34" y="22">VCC</text>
+        <text x="120" y="82">RB</text>
+        <text x="224" y="66">RC</text>
+        <text x="224" y="205">RE</text>
+        <text x="234" y="124">Q1</text>
+        <text x="140" y="122">B</text>
+      </g>
+    </svg>
+  </figure>
+  {% else %}
   <figure class="schematic" aria-hidden="true">
     <svg viewBox="0 0 360 250" xmlns="http://www.w3.org/2000/svg">
       <g fill="none" stroke="#17344b" stroke-width="2" stroke-linecap="round">
@@ -59,6 +119,7 @@
       </g>
     </svg>
   </figure>
+  {% endif %}
 
   <div class="layout{% if result %} layout--result{% endif %}">
     <section>
@@ -75,11 +136,27 @@
       {% endif %}
 
       <form method="post" novalidate>
+        <div class="field mode-field">
+          <label for="mode">วงจร</label>
+          <select id="mode" name="mode">
+            <option value="fixed"{% if mode == 'fixed' %} selected{% endif %}>Fixed Bias</option>
+            <option value="emitter"{% if mode == 'emitter' %} selected{% endif %}>Emitter Bias</option>
+            <option value="divider"{% if mode == 'divider' %} selected{% endif %}>Voltage Divider Bias</option>
+          </select>
+        </div>
         <div class="field">
           <label for="vcc">VCC</label>
           <input id="vcc" name="vcc" value="{{ values.vcc }}" inputmode="decimal" autocomplete="off">
           <span class="unit">V</span>
         </div>
+        {% if mode == 'fixed' or mode == 'emitter' %}
+        <div class="field">
+          <label for="rb">RB</label>
+          <input id="rb" name="rb" value="{{ values.rb }}" inputmode="decimal" autocomplete="off">
+          <span class="unit">Ω</span>
+        </div>
+        {% endif %}
+        {% if mode == 'divider' %}
         <div class="field">
           <label for="r1">R1</label>
           <input id="r1" name="r1" value="{{ values.r1 }}" inputmode="decimal" autocomplete="off">
@@ -90,16 +167,19 @@
           <input id="r2" name="r2" value="{{ values.r2 }}" inputmode="decimal" autocomplete="off">
           <span class="unit">Ω</span>
         </div>
+        {% endif %}
         <div class="field">
           <label for="rc">RC</label>
           <input id="rc" name="rc" value="{{ values.rc }}" inputmode="decimal" autocomplete="off">
           <span class="unit">Ω</span>
         </div>
+        {% if mode == 'emitter' or mode == 'divider' %}
         <div class="field">
           <label for="re">RE</label>
           <input id="re" name="re" value="{{ values.re }}" inputmode="decimal" autocomplete="off">
           <span class="unit">Ω</span>
         </div>
+        {% endif %}
         <div class="field">
           <label for="beta">β</label>
           <input id="beta" name="beta" value="{{ values.beta }}" inputmode="decimal" autocomplete="off">
@@ -115,7 +195,7 @@
         <a class="reset" href="{{ url_for('index') }}">ใช้ค่าตัวอย่าง</a>
       </form>
 
-      <p class="hint">ใส่ k ได้ เช่น <strong>100k</strong>, <strong>2.2k</strong> · ไม่ใส่หน่วย = Ω</p>
+      <p class="hint">ใส่ k หรือ M ได้ เช่น <strong>100k</strong>, <strong>1M</strong> · ไม่ใส่หน่วย = Ω · ค่าตัวอย่าง: VCC {{ sample.vcc }} V, RC {{ sample.rc }} Ω, β {{ sample.beta }}, VBE {{ sample.vbe }} V{% if mode == 'fixed' %}, RB {{ sample.rb }} Ω{% elif mode == 'emitter' %}, RB {{ sample.rb }} Ω, RE {{ sample.re }} Ω{% else %}, R1 {{ sample.r1 }} Ω, R2 {{ sample.r2 }} Ω, RE {{ sample.re }} Ω{% endif %}</p>
     </section>
 
     <section>
@@ -143,17 +223,49 @@
       {% endif %}
 
       <div class="steps">
-        <p class="steps-title">ขั้นตอนคำนวณ</p>VTH = VCC · R2 / (R1 + R2)     = {{ '%.3f'|format(result.vth) }} V
-{% if result.region == 'cutoff' %}VTH ≤ VBE  ({{ '%.3f'|format(result.vth) }} ≤ {{ '%.3f'|format(values.vbe|float) }} V) → Cutoff (รอยต่อ B–E ไม่นำ)
+        <p class="steps-title">ขั้นตอนคำนวณ</p>{% if mode == 'fixed' %}{% if result.region == 'cutoff' %}IB ≤ 0 → Cutoff (VCC ไม่มากกว่า VBE)
+IB = 0                         = {{ '%.2f'|format(result.ib * 1e6) }} µA
+IC = 0                         = {{ '%.3f'|format(result.ic * 1000) }} mA
+IE = 0                         = {{ '%.3f'|format(result.ie * 1000) }} mA
+VE = 0                         = {{ '%.3f'|format(result.ve) }} V
+VB = VBE                       = {{ '%.3f'|format(result.vb) }} V
+VC = VCC                       = {{ '%.3f'|format(result.vc) }} V
+VCE = VCC                      = {{ '%.3f'|format(result.vce) }} V{% else %}IB = (VCC − VBE) / RB = {{ '%.2f'|format(result.ib * 1e6) }} µA
+IC = β · IB                    = {{ '%.3f'|format(result.ic * 1000) }} mA
+IE = (β + 1) · IB              = {{ '%.3f'|format(result.ie * 1000) }} mA
+VE = 0                         = {{ '%.3f'|format(result.ve) }} V
+VB = VBE                       = {{ '%.3f'|format(result.vb) }} V
+VC = VCC − IC · RC             = {{ '%.3f'|format(result.vc) }} V
+VCE = VC                       = {{ '%.3f'|format(result.vce) }} V{% endif %}{% elif mode == 'emitter' %}{% if result.region == 'cutoff' %}IB ≤ 0 → Cutoff (VCC ไม่มากกว่า VBE)
+IB = 0                         = {{ '%.2f'|format(result.ib * 1e6) }} µA
+IC = 0                         = {{ '%.3f'|format(result.ic * 1000) }} mA
+IE = 0                         = {{ '%.3f'|format(result.ie * 1000) }} mA
+VE = 0                         = {{ '%.3f'|format(result.ve) }} V
+VB = VBE                       = {{ '%.3f'|format(result.vb) }} V
+VC = VCC                       = {{ '%.3f'|format(result.vc) }} V
+VCE = VCC                      = {{ '%.3f'|format(result.vce) }} V{% else %}IB = (VCC − VBE) / (RB + (β+1)·RE) = {{ '%.2f'|format(result.ib * 1e6) }} µA
+IC = β · IB                    = {{ '%.3f'|format(result.ic * 1000) }} mA
+IE = (β + 1) · IB              = {{ '%.3f'|format(result.ie * 1000) }} mA
+VE = IE · RE                   = {{ '%.3f'|format(result.ve) }} V
+VB = VE + VBE                  = {{ '%.3f'|format(result.vb) }} V
+VC = VCC − IC · RC             = {{ '%.3f'|format(result.vc) }} V
+VCE = VC − VE                  = {{ '%.3f'|format(result.vce) }} V{% endif %}{% else %}VTH = VCC · R2 / (R1 + R2)     = {{ '%.3f'|format(result.vth) }} V
+{% if result.region == 'cutoff' %}IB ≤ 0 → Cutoff
+VTH ≤ VBE  ({{ '%.3f'|format(result.vth) }} ≤ {{ '%.3f'|format(values.vbe|float) }} V) → Cutoff (รอยต่อ B–E ไม่นำ)
 IB  = 0                        = {{ '%.2f'|format(result.ib * 1e6) }} µA
-IE  = 0                        = {{ '%.3f'|format(result.ie * 1000) }} mA{% else %}RTH = R1 ∥ R2                  = {{ '%.2f'|format(result.rth / 1000) }} kΩ
+IC  = 0                        = {{ '%.3f'|format(result.ic * 1000) }} mA
+IE  = 0                        = {{ '%.3f'|format(result.ie * 1000) }} mA
+VE  = 0                        = {{ '%.3f'|format(result.ve) }} V
+VB  = VTH                      = {{ '%.3f'|format(result.vb) }} V
+VC  = VCC                      = {{ '%.3f'|format(result.vc) }} V
+VCE = VCC                      = {{ '%.3f'|format(result.vce) }} V{% else %}RTH = R1 ∥ R2                  = {{ '%.2f'|format(result.rth / 1000) }} kΩ
 IB  = (VTH − VBE) / (RTH + (β+1)·RE) = {{ '%.2f'|format(result.ib * 1e6) }} µA
 IC  = β · IB                   = {{ '%.3f'|format(result.ic * 1000) }} mA
 IE  = (β + 1) · IB             = {{ '%.3f'|format(result.ie * 1000) }} mA
 VE  = IE · RE                  = {{ '%.3f'|format(result.ve) }} V
 VB  = VE + VBE                 = {{ '%.3f'|format(result.vb) }} V
 VC  = VCC − IC · RC            = {{ '%.3f'|format(result.vc) }} V
-VCE = VC − VE                  = {{ '%.3f'|format(result.vce) }} V{% endif %}</div>
+VCE = VC − VE                  = {{ '%.3f'|format(result.vce) }} V{% endif %}{% endif %}</div>
 
       {% if result.notes %}
       <ul class="notes">
@@ -167,7 +279,11 @@ VCE = VC − VE                  = {{ '%.3f'|format(result.vce) }} V{% endif %}<
     </section>
   </div>
 
+  {% if mode == 'divider' %}
   <p class="assumptions">แบบจำลอง: คิดกระแสเบสผ่าน Thevenin (RTH, VTH) · β คงที่ · VBE คงที่ · Forward-Active — ผลที่ได้ใช้ได้เฉพาะเมื่อวงจรอยู่ในช่วง Active</p>
+  {% else %}
+  <p class="assumptions">แบบจำลอง: β คงที่ · VBE คงที่ · Forward-Active — ผลที่ได้ใช้ได้เฉพาะเมื่อวงจรอยู่ในช่วง Active</p>
+  {% endif %}
 </div>
 </body>
 </html>

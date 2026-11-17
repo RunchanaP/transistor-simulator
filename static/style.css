@@ -107,6 +107,28 @@ h2 {
   border-color: var(--blue);
 }
 
+.field select {
+  width: 100%;
+  padding: 8px 10px;
+  font: inherit;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #fbfdff;
+}
+
+.field select:focus {
+  outline: 2px solid #9ec8e6;
+  outline-offset: 1px;
+  border-color: var(--blue);
+}
+
+.mode-field {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
 .field .unit {
   font-size: 0.85rem;
   color: var(--muted);

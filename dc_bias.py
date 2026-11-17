@@ -1,7 +1,7 @@
-"""Engineering logic for a BJT common-emitter DC bias (voltage-divider bias).
+"""Engineering logic for three BJT common-emitter DC bias circuits.
 
 This module knows nothing about Flask, HTTP, or HTML. It converts user text
-into numbers, validates them, and solves the forward-active operating point.
+into numbers, validates them, and solves the operating point.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Mapping
 
 # Typical silicon VCE(sat); a model threshold, not a device-specific value.
-VCE_SAT = 0.3
+VCE_SAT = 0.2
 
 MAX_VCC = 1e4          # V
 MAX_RESISTANCE = 1e12  # ohm
@@ -21,8 +21,22 @@ MAX_BETA = 1e5
 SAMPLE_VALUES = {"vcc": "12", "r1": "100k", "r2": "22k", "rc": "2.2k",
                  "re": "1k", "beta": "100", "vbe": "0.7"}
 
-RESISTANCE_FIELDS = ("r1", "r2", "rc", "re")
+MODE_FIXED = "fixed"
+MODE_EMITTER = "emitter"
+MODE_DIVIDER = "divider"
+MODES = (MODE_FIXED, MODE_EMITTER, MODE_DIVIDER)
+
+MODE_SAMPLES = {
+    MODE_DIVIDER: dict(SAMPLE_VALUES),
+    MODE_FIXED: {"vcc": "12", "rb": "1M", "rc": "2.2k", "beta": "100", "vbe": "0.7"},
+    MODE_EMITTER: {"vcc": "12", "rb": "1M", "rc": "2.2k", "re": "1k",
+                   "beta": "100", "vbe": "0.7"},
+}
+
+RESISTANCE_FIELDS = ("rb", "r1", "r2", "rc", "re")
 NUMERIC_FIELDS = ("vcc", "r1", "r2", "rc", "re", "beta", "vbe")
+FIXED_FIELDS = ("vcc", "rb", "rc", "beta", "vbe")
+EMITTER_FIELDS = ("vcc", "rb", "rc", "re", "beta", "vbe")
 
 _OHM_SUFFIX = re.compile(r"(ohms?|\u03a9)$", re.IGNORECASE)
 
@@ -44,6 +58,34 @@ class BiasInput:
     re: float
     beta: float
     vbe: float
+
+
+@dataclass(frozen=True)
+class FixedInput:
+    vcc: float
+    rb: float
+    rc: float
+    beta: float
+    vbe: float
+
+
+@dataclass(frozen=True)
+class EmitterInput:
+    vcc: float
+    rb: float
+    rc: float
+    re: float
+    beta: float
+    vbe: float
+
+
+def normalize_mode(raw: object) -> str:
+    """Return a supported mode, or report an invalid/missing mode as an error."""
+    if isinstance(raw, str):
+        mode = raw.strip().lower()
+        if mode in MODES:
+            return mode
+    raise ValidationError({"mode": "โหมดวงจรไม่ถูกต้อง"})
 
 
 def parse_resistance(text: str) -> float:
@@ -95,8 +137,8 @@ def _parse_plain(text: str) -> float:
         raise ValueError("กรุณากรอกตัวเลข") from exc
 
 
-def parse_inputs(raw: Mapping[str, str]) -> BiasInput:
-    """Parse and validate a form mapping.
+def parse_fields(raw: Mapping[str, str], required: tuple[str, ...]) -> dict[str, float]:
+    """Parse and validate only the fields the selected circuit needs.
 
     Every failing field is reported at once through ``ValidationError.errors``
     so the page can show all messages in a single pass.
@@ -104,7 +146,7 @@ def parse_inputs(raw: Mapping[str, str]) -> BiasInput:
     errors: dict[str, str] = {}
     parsed: dict[str, float] = {}
 
-    for field in NUMERIC_FIELDS:
+    for field in required:
         try:
             if field in RESISTANCE_FIELDS:
                 parsed[field] = parse_resistance(raw.get(field))
@@ -138,7 +180,24 @@ def parse_inputs(raw: Mapping[str, str]) -> BiasInput:
     if errors:
         raise ValidationError(errors)
 
-    return BiasInput(**parsed)
+    return parsed
+
+
+def parse_fixed(raw: Mapping[str, str]) -> FixedInput:
+    return FixedInput(**parse_fields(raw, FIXED_FIELDS))
+
+
+def parse_emitter(raw: Mapping[str, str]) -> EmitterInput:
+    return EmitterInput(**parse_fields(raw, EMITTER_FIELDS))
+
+
+def parse_divider(raw: Mapping[str, str]) -> BiasInput:
+    return BiasInput(**parse_fields(raw, NUMERIC_FIELDS))
+
+
+def parse_inputs(raw: Mapping[str, str]) -> BiasInput:
+    """Parse and validate a voltage-divider form mapping (Lab 02 API)."""
+    return parse_divider(raw)
 
 
 @dataclass(frozen=True)
@@ -155,51 +214,43 @@ class BiasResult:
     region: str
     warnings: list[str]
     notes: list[str]
+    mode: str = MODE_DIVIDER
 
 
-def solve_dc_bias(inp: BiasInput) -> BiasResult:
-    """Solve the forward-active DC operating point.
-
-    Region is ``"active"``, ``"cutoff"``, or ``"saturation"``. ``warnings``
-    explains when the forward-active model does not describe the circuit;
-    ``notes`` carries softer advisories and can be non-empty while active.
-    """
-    vth = inp.vcc * inp.r2 / (inp.r1 + inp.r2)
-    rth = inp.r1 * inp.r2 / (inp.r1 + inp.r2)
-
-    if vth <= inp.vbe:
-        ib = ic = ie = 0.0
-        ve = 0.0
-        vb = vth
-        vc = inp.vcc
-        vce = inp.vcc
+def _assemble(mode: str, vcc: float, vbe: float, vth: float, rth: float,
+              ib: float, ic: float, ie: float, vb: float, ve: float,
+              vc: float, vce: float) -> BiasResult:
+    """Classify the region and build the shared result for every circuit."""
+    if ib <= 0:
+        ib = ic = ie = ve = 0.0
+        vb = vth if mode == MODE_DIVIDER else vbe
+        vc = vcc
+        vce = vcc
         region = "cutoff"
-        warnings = [
-            f"VTH = {vth:.3f} V ไม่มากกว่า VBE = {inp.vbe:.3f} V "
-            "ทรานซิสเตอร์อยู่ในช่วง Cutoff — แบบจำลอง Forward-Active ใช้ไม่ได้"
-        ]
-    else:
-        ib = (vth - inp.vbe) / (rth + (inp.beta + 1) * inp.re)
-        ic = inp.beta * ib
-        ie = (inp.beta + 1) * ib
-        ve = ie * inp.re
-        vb = ve + inp.vbe
-        vc = inp.vcc - ic * inp.rc
-        vce = vc - ve
-        if vce > VCE_SAT:
-            region = "active"
-            warnings = []
+        if mode == MODE_DIVIDER:
+            reason = (f"IB ≤ 0 เพราะ VTH = {vth:.3f} V ไม่มากกว่า "
+                      f"VBE = {vbe:.3f} V")
         else:
-            region = "saturation"
-            warnings = [
-                f"VCE = {vce:.3f} V ต่ำกว่า VCE(sat) ≈ 0.2–0.3 V — "
-                "ค่าที่แสดงมาจากสมการ Forward-Active จึงไม่ตรงกับวงจรจริง"
-            ]
+            reason = (f"IB ≤ 0 เพราะ VCC = {vcc:.3f} V ไม่มากกว่า "
+                      f"VBE = {vbe:.3f} V")
+        warnings = [
+            f"{reason} — ทรานซิสเตอร์อยู่ในช่วง Cutoff — "
+            "แบบจำลอง Forward-Active ใช้ไม่ได้"
+        ]
+    elif vce > VCE_SAT:
+        region = "active"
+        warnings = []
+    else:
+        region = "saturation"
+        warnings = [
+            f"VCE = {vce:.3f} V อยู่ในช่วง VCE ≤ 0.2 V — "
+            "ค่าที่แสดงมาจากสมการ Forward-Active จึงไม่ตรงกับวงจรจริง"
+        ]
 
     notes: list[str] = []
-    if not 0.5 <= inp.vbe <= 0.9:
+    if not 0.5 <= vbe <= 0.9:
         notes.append(
-            f"VBE = {inp.vbe:.2f} V อยู่นอกช่วงปกติของ BJT ซิลิกอน (0.5–0.9 V)"
+            f"VBE = {vbe:.2f} V อยู่นอกช่วงปกติของ BJT ซิลิกอน (0.5–0.9 V)"
         )
 
     values = (vth, rth, ib, ic, ie, ve, vb, vc, vce)
@@ -209,6 +260,50 @@ def solve_dc_bias(inp: BiasInput) -> BiasResult:
     return BiasResult(
         vth=vth, rth=rth, ib=ib, ic=ic, ie=ie,
         vb=vb, ve=ve, vc=vc, vce=vce,
-        region=region, warnings=warnings, notes=notes,
+        region=region, warnings=warnings, notes=notes, mode=mode,
     )
+
+
+def solve_fixed(inp: FixedInput) -> BiasResult:
+    """Solve fixed bias: the base is driven from VCC through RB."""
+    ib = (inp.vcc - inp.vbe) / inp.rb
+    ic = inp.beta * ib
+    ie = (inp.beta + 1) * ib
+    vc = inp.vcc - ic * inp.rc
+    return _assemble(MODE_FIXED, inp.vcc, inp.vbe, inp.vcc, inp.rb,
+                     ib, ic, ie, inp.vbe, 0.0, vc, vc)
+
+
+def solve_emitter(inp: EmitterInput) -> BiasResult:
+    """Solve single-supply emitter bias with RE and a base resistor RB."""
+    ib = (inp.vcc - inp.vbe) / (inp.rb + (inp.beta + 1) * inp.re)
+    ic = inp.beta * ib
+    ie = (inp.beta + 1) * ib
+    ve = ie * inp.re
+    vb = ve + inp.vbe
+    vc = inp.vcc - ic * inp.rc
+    return _assemble(MODE_EMITTER, inp.vcc, inp.vbe, inp.vcc, inp.rb,
+                     ib, ic, ie, vb, ve, vc, vc - ve)
+
+
+def solve_dc_bias(inp: BiasInput) -> BiasResult:
+    """Solve voltage-divider bias using its Thevenin equivalent.
+
+    Region is ``"active"``, ``"cutoff"``, or ``"saturation"``. ``warnings``
+    explains when the forward-active model does not describe the circuit;
+    ``notes`` carries softer advisories and can be non-empty while active.
+    """
+    vth = inp.vcc * inp.r2 / (inp.r1 + inp.r2)
+    rth = inp.r1 * inp.r2 / (inp.r1 + inp.r2)
+
+    ib = (vth - inp.vbe) / (rth + (inp.beta + 1) * inp.re)
+    ic = inp.beta * ib
+    ie = (inp.beta + 1) * ib
+    ve = ie * inp.re
+    vb = ve + inp.vbe
+    vc = inp.vcc - ic * inp.rc
+    vce = vc - ve
+
+    return _assemble(MODE_DIVIDER, inp.vcc, inp.vbe, vth, rth,
+                     ib, ic, ie, vb, ve, vc, vce)
 

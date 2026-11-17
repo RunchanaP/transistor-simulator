@@ -2,7 +2,10 @@
 
 import unittest
 
-from dc_bias import BiasInput, ValidationError, parse_inputs, parse_resistance, solve_dc_bias
+from dc_bias import (MODE_SAMPLES, BiasInput, EmitterInput, FixedInput,
+                     ValidationError, normalize_mode, parse_emitter, parse_fixed,
+                     parse_inputs, parse_resistance, solve_dc_bias, solve_emitter,
+                     solve_fixed)
 
 VALID = {"vcc": "12", "r1": "100k", "r2": "22k", "rc": "2.2k",
          "re": "1k", "beta": "100", "vbe": "0.7"}
@@ -153,6 +156,110 @@ class SolveTests(unittest.TestCase):
         self.assertEqual(r.region, "active")
         self.assertEqual(r.warnings, [])
         self.assertTrue(r.notes)
+
+
+COMMON = {"vcc": "12", "rc": "2.2k", "beta": "100", "vbe": "0.7"}
+A2 = dict(COMMON, rb="1M")
+A3 = dict(A2, re="1k")
+
+
+class ModeParsingTests(unittest.TestCase):
+    def test_normalize_mode_accepts_all_three(self):
+        self.assertEqual(normalize_mode("fixed"), "fixed")
+        self.assertEqual(normalize_mode(" EMITTER "), "emitter")
+        self.assertEqual(normalize_mode("divider"), "divider")
+
+    def test_normalize_mode_rejects_unknown(self):
+        for raw in ("bogus", "", None):
+            with self.assertRaises(ValidationError) as ctx:
+                normalize_mode(raw)
+            self.assertIn("mode", ctx.exception.errors)
+
+    def test_parse_fixed_ignores_unrelated_fields(self):
+        inp = parse_fixed(dict(A2, r1="junk", r2="junk", re="junk"))
+        self.assertEqual(inp.rb, 1_000_000.0)
+        self.assertEqual(inp.rc, 2200.0)
+
+    def test_parse_emitter_ignores_unrelated_fields(self):
+        inp = parse_emitter(dict(A3, r1="junk", r2="junk"))
+        self.assertEqual(inp.rb, 1_000_000.0)
+        self.assertEqual(inp.re, 1000.0)
+
+    def test_parse_fixed_rejects_zero_rb(self):
+        with self.assertRaises(ValidationError) as ctx:
+            parse_fixed(dict(A2, rb="0"))
+        self.assertEqual(ctx.exception.errors["rb"], "ค่าความต้านทานต้องมากกว่า 0")
+
+    def test_parse_fixed_rejects_non_numeric_rb(self):
+        with self.assertRaises(ValidationError) as ctx:
+            parse_fixed(dict(A2, rb="abc"))
+        self.assertEqual(ctx.exception.errors["rb"], "กรุณากรอกตัวเลข")
+
+    def test_mode_samples_match_worksheet(self):
+        self.assertEqual(MODE_SAMPLES["fixed"]["rb"], "1M")
+        self.assertEqual(MODE_SAMPLES["emitter"]["re"], "1k")
+        self.assertEqual(MODE_SAMPLES["divider"], {
+            "vcc": "12", "r1": "100k", "r2": "22k", "rc": "2.2k",
+            "re": "1k", "beta": "100", "vbe": "0.7",
+        })
+
+
+class ThreeModeSolverTests(unittest.TestCase):
+    def sample(self):
+        return BiasInput(vcc=12.0, r1=100e3, r2=22e3, rc=2.2e3,
+                         re=1e3, beta=100.0, vbe=0.7)
+
+    def test_divider_reference_unchanged(self):
+        r = solve_dc_bias(self.sample())
+        for attr, expected in (("vb", 1.94216), ("ve", 1.24216), ("vc", 9.29431),
+                               ("vce", 8.05216)):
+            self.assertAlmostEqual(getattr(r, attr), expected, places=4)
+        self.assertAlmostEqual(r.ic * 1e3, 1.22986, places=4)
+        self.assertAlmostEqual(r.ib * 1e6, 12.2986, places=3)
+        self.assertEqual(r.mode, "divider")
+
+    def test_fixed_a2_reference(self):
+        r = solve_fixed(FixedInput(vcc=12.0, rb=1e6, rc=2200.0, beta=100.0, vbe=0.7))
+        self.assertAlmostEqual(r.ib * 1e6, 11.30, places=2)
+        self.assertAlmostEqual(r.ic * 1e3, 1.130, places=3)
+        self.assertAlmostEqual(r.ve, 0.0, places=6)
+        self.assertAlmostEqual(r.vb, 0.700, places=3)
+        self.assertAlmostEqual(r.vc, 9.514, places=3)
+        self.assertAlmostEqual(r.vce, 9.514, places=3)
+        self.assertEqual(r.region, "active")
+        self.assertEqual(r.mode, "fixed")
+
+    def test_emitter_a3_reference(self):
+        r = solve_emitter(EmitterInput(vcc=12.0, rb=1e6, rc=2200.0,
+                                       re=1000.0, beta=100.0, vbe=0.7))
+        self.assertAlmostEqual(r.ic * 1e3, 1.026, places=3)
+        self.assertAlmostEqual(r.ie * 1e3, 1.037, places=3)
+        self.assertAlmostEqual(r.ve, 1.037, places=3)
+        self.assertAlmostEqual(r.vb, 1.737, places=3)
+        self.assertAlmostEqual(r.vc, 9.742, places=3)
+        self.assertAlmostEqual(r.vce, 8.705, places=3)
+        self.assertEqual(r.mode, "emitter")
+
+    def test_emitter_a4_re_more_means_less_ic(self):
+        a3 = solve_emitter(EmitterInput(12.0, 1e6, 2200.0, 1000.0, 100.0, 0.7))
+        a4 = solve_emitter(EmitterInput(12.0, 1e6, 2200.0, 2000.0, 100.0, 0.7))
+        self.assertLess(a4.ic, a3.ic)
+        self.assertAlmostEqual(a4.ic * 1e3, 0.940, places=3)
+        self.assertAlmostEqual(a4.vce, 8.033, places=3)
+
+    def test_ib_nonpositive_is_cutoff(self):
+        r = solve_fixed(FixedInput(vcc=0.5, rb=1e6, rc=2200.0, beta=100.0, vbe=0.7))
+        self.assertEqual(r.region, "cutoff")
+        self.assertEqual((r.ib, r.ic, r.ie, r.ve), (0.0, 0.0, 0.0, 0.0))
+        self.assertEqual(r.vc, 0.5)
+        self.assertTrue(r.warnings)
+
+    def test_vce_between_020_and_030_is_active(self):
+        r = solve_dc_bias(BiasInput(vcc=12.0, r1=100e3, r2=22e3, rc=8544.0,
+                                    re=1e3, beta=100.0, vbe=0.7))
+        self.assertGreater(r.vce, 0.2)
+        self.assertLess(r.vce, 0.3)
+        self.assertEqual(r.region, "active")
 
 
 if __name__ == "__main__":

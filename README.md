@@ -1,21 +1,28 @@
-# BJT DC Bias Calculator — ENG29 2121 Lab 02
+# BJT DC Bias Calculator — ENG29 2121 Lab 03
 
 เว็บแอปพลิเคชัน Flask สำหรับคำนวณ **DC Operating Point** ของวงจรขยาย BJT
-NPN Common Emitter แบบ **Voltage-Divider Bias** ภายใต้สมมติฐาน Forward-Active
-(β คงที่, VBE คงที่) คำนวณด้วยวิธี Thevenin (คิดกระแสเบสผ่าน `RTH`)
+NPN Common Emitter สามแบบ: **Fixed Bias**, **Emitter Bias (แหล่งจ่ายเดียว)** และ
+**Voltage-Divider Bias (ของ Lab 02)** ภายใต้สมมติฐาน Forward-Active
+(β คงที่, VBE คงที่) — เลือกโหมดจาก dropdown แล้วกด Calculate DC Bias
+(POST reload ไม่มี JavaScript)
 
-Lab 02 · Computer Programming for Electrical Engineers · 2/2569
+Lab 03 · Computer Programming for Electrical Engineers · 2/2569
 
 ---
 
 ## สิ่งที่แอปทำ
 
-- รับค่า `VCC, R1, R2, RC, RE, β, VBE` ผ่านฟอร์มบนเว็บ
+- เลือกโหมดได้ 3 โหมด (`fixed`, `emitter`, `divider`) ฟอร์มแสดงเฉพาะช่องที่โหมดนั้นใช้:
+  - **Fixed Bias** — `VCC, RB, RC, β, VBE` (ไม่มี `RE`)
+  - **Emitter Bias** — `VCC, RB, RC, RE, β, VBE`
+  - **Voltage Divider Bias** — `VCC, R1, R2, RC, RE, β, VBE`
 - คำนวณด้วย Python backend (`dc_bias.py`) ไม่ใช่ตัวเลขที่เขียนค้างใน HTML
-- แสดง `VB, VE, VC, VCE, IC, IB, IE` พร้อมหน่วย และบล็อก "ขั้นตอนคำนวณ"
-  (`VTH, RTH, IB, IC, IE, VE, VB, VC, VCE`) สำหรับคัดลอกลงสมุด
-- ตรวจสอบข้อมูลเข้าและแจ้ง error ภาษาไทยทีละช่อง
-- เตือนเมื่อวงจรอยู่นอกช่วง Forward-Active (Cutoff / Saturation)
+- แสดง `VB, VE, VC, VCE, IC, IB, IE` พร้อมหน่วย และบล็อก "ขั้นตอนคำนวณ" ที่เขียน
+  formula ตรงโหมดที่เลือก (`VTH/RTH` เฉพาะ Divider)
+- ตรวจสอบข้อมูลเข้าและแจ้ง error ภาษาไทยทีละช่อง; โหมดหาย/ไม่รู้จักก็แจ้ง error
+  (**ไม่ default เป็น Divider**) และไม่โชว์ผลรอบก่อน
+- เตือนเมื่อวงจรอยู่นอกช่วง Forward-Active (`IB ≤ 0` → Cutoff, `VCE ≤ 0.2 V` → Saturation)
+- **Voltage Divider Bias ให้ผลเหมือน Lab 02 ทุกประการเมื่อกรอกค่าตัวอย่างเดิม (A1)**
 
 ## ความต้องการของระบบ
 
@@ -51,12 +58,12 @@ python3 -m venv .venv
 .venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-ต้องได้ **46 tests ... OK** — 23 engineering tests ใน `test_dc_bias.py`
-(7 การแปลงหน่วย, 10 validation, 6 solver) และ 23 HTTP tests ใน `test_web.py`
+ต้องได้ **70 tests ... OK** — 36 engineering tests ใน `test_dc_bias.py`
+และ 34 HTTP tests ใน `test_web.py` (46 เดิมของ Lab 02 + 24 ใหม่สำหรับสามโหมด)
 
 ## การกรอกค่า
 
-ช่องความต้านทานรับหน่วยได้โดยตรง:
+ช่องความต้านทานรับหน่วยได้โดยตรง (ทุกโหมด):
 
 | พิมพ์ | ความหมาย |
 |---|---|
@@ -67,37 +74,38 @@ python3 -m venv .venv
 | `5m` | ❌ ปฏิเสธ (กำกวมระหว่าง milli และ mega) |
 
 ช่อง `VCC`, `β`, `VBE` เป็นตัวเลขล้วน (V, เท่า, V)
+ค่า `RB = 0` ใช้ทดสอบ A5 ได้ — จะขึ้น error ภาษาไทยแทน results table
 
 ## แบบจำลองและข้อจำกัด
 
-สมการที่ใช้ (วิธี Thevenin):
+สมการทั้งหมดอยู่ใน `dc_bias.py` (`solve_fixed`, `solve_emitter`, `solve_dc_bias`):
 
 ```
-VTH = VCC · R2 / (R1 + R2)
-RTH = R1 · R2 / (R1 + R2)
-IB  = (VTH − VBE) / (RTH + (β + 1)·RE)
-IC  = β · IB
-IE  = (β + 1) · IB
-VE  = IE · RE
-VB  = VE + VBE
-VC  = VCC − IC · RC
-VCE = VC − VE
+Fixed:       IB  = (VCC − VBE) / RB
+Emitter:     IB  = (VCC − VBE) / (RB + (β + 1)·RE)
+Divider:     VTH = VCC · R2 / (R1 + R2)
+             RTH = R1 · R2 / (R1 + R2)
+             IB  = (VTH − VBE) / (RTH + (β + 1)·RE)
+ร่วมทุกโหมด:  IC  = β · IB,  IE = (β + 1) · IB
+Fixed:       VE = 0, VB = VBE, VC = VCC − IC·RC, VCE = VC
+Emitter/Div: VE = IE·RE, VB = VE + VBE, VC = VCC − IC·RC, VCE = VC − VE
 ```
 
-ค่าที่ได้กับค่าอุปกรณ์ตัวอย่าง (12 V, 100k, 22k, 2.2k, 1k, β=100, VBE=0.70 V):
+**ตารางตัวอย่าง A1–A4** (common: `VCC = 12 V`, `RC = 2.2 kΩ`, `β = 100`, `VBE = 0.70 V`).
+ค่า `___` ในคอลัมน์คาดหมายเป็นของนักศึกษาต้องคำนวณมือเองก่อนรันแอป — ห้ามก็อปจากโปรแกรม:
 
-| ปริมาณ | ค่า |
-|---|---|
-| VB | 1.942 V |
-| VE | 1.242 V |
-| VC | 9.294 V |
-| VCE | 8.052 V |
-| IC | 1.230 mA |
-| IB | 12.30 µA |
-| IE | 1.242 mA |
+| กรณี | โหมดและค่า | IC (คาดหมาย) | VCE (คาดหมาย) |
+|---|---|---|---|
+| A1 · โหมดเดิม | Divider · `R1 = 100 kΩ`, `R2 = 22 kΩ`, `RE = 1 kΩ` | ___ mA | ___ V |
+| A2 · Fixed | Fixed · `RB = 1 MΩ` | ___ mA | ___ V |
+| A3 · Emitter | Emitter · `RB = 1 MΩ`, `RE = 1 kΩ` | ___ mA | ___ V |
+| A4 · เปลี่ยนค่าเดียว | Emitter · เหมือน A3 แต่ `RE = 2 kΩ` | ___ mA | ___ V |
 
-- **Cutoff** (`VTH ≤ VBE`): กระแสเป็นศูนย์, `VC = VCC` — แบบจำลอง Forward-Active ใช้ไม่ได้
-- **Saturation** (`VCE ≤ 0.3 V`): ตัวเลขยังแสดง แต่มาจากสมการ Forward-Active
+A1 เทียบกับผล Lab 02 เดิมได้เลย: VB 1.942 V · VE 1.242 V · VC 9.294 V ·
+VCE 8.052 V · IC 1.230 mA · IB 12.30 µA · IE 1.242 mA
+
+- **Cutoff** (`IB ≤ 0` ทุกโหมด): กระแสเป็นศูนย์, `VC = VCC` — แบบจำลอง Forward-Active ใช้ไม่ได้
+- **Saturation** (`VCE ≤ 0.2 V` ทุกโหมด): ตัวเลขยังแสดง แต่มาจากสมการ Forward-Active
   จึงไม่ตรงกับวงจรจริง (ของจริง `VCE ≈ 0.2 V`)
 - ไม่ใช่ SPICE — ไม่มีการแก้สมการแบบไม่เชิงเส้น, ไม่มี AC, ไม่มี transient
 
@@ -108,11 +116,11 @@ VCE = VC − VE
    ซึ่งถูกรันโดย Python เท่านั้น
 2. **ฟอร์มส่งข้อมูลไป Python อย่างไร** — `<form method="post">` ทำให้เบราว์เซอร์ส่ง
    HTTP POST ไปที่ `/` พร้อมข้อมูลในรูป `application/x-www-form-urlencoded`
-   Flask อ่านด้วย `request.form` แล้วเรียก `parse_inputs()` และ `solve_dc_bias()`
-   จากนั้น `render_template()` สร้าง HTML ใหม่ส่งกลับมา
-3. **แก้สมการใน `dc_bias.py` แล้วต้องแก้ HTML ไหม** — ไม่ต้อง ถ้าแก้แค่สูตรภายใน
-   `solve_dc_bias()` เพราะ template แสดงค่าที่ส่งมาจาก Python อยู่แล้ว แต่ถ้าเพิ่ม
-   ค่าใหม่ที่ต้องแสดง ต้องเพิ่มแถวในตารางผลลัพธ์ด้วย
+   Flask อ่านด้วย `request.form`, เรียก `normalize_mode()` → `parse_fixed/parse_emitter/parse_divider()`
+   → `solve_fixed/solve_emitter/solve_dc_bias()` แล้ว `render_template()` สร้าง HTML ใหม่ส่งกลับ
+3. **แก้สมการใน `dc_bias.py` แล้วต้องแก้ HTML ไหม** — ไม่ต้อง ถ้าแก้แค่สูตรภายใน solver
+   เพราะ template แสดงค่าที่ส่งมาจาก Python อยู่แล้ว แต่ถ้าเพิ่มโหมด/ค่าที่ต้องแสดง
+   ต้องเพิ่ม field/steps/แถวในตารางผลลัพธ์ด้วย
 4. **ทำไม Region ที่แบบจำลองใช้ไม่ได้ต้องมี Warning** — เพราะสมการ Forward-Active
    สมมติว่า `VBE ≈ 0.7 V` และ `IC = β·IB` ตลอด ซึ่งไม่จริงใน Cutoff/Saturation
    หากแสดงตัวเลขโดยไม่เตือน ผู้ใช้จะเข้าใจผิดว่าค่านั้นใช้ได้จริง
@@ -120,9 +128,9 @@ VCE = VC − VE
 ## โครงสร้างไฟล์
 
 ```
-app.py              Flask routes (GET/POST /)
-dc_bias.py          สมการ + parsing + validation (ไม่รู้จัก Flask/HTML)
-templates/index.html  ฟอร์ม + ผลลัพธ์ (Jinja)
+app.py              Flask routes (GET/POST /), mode dispatch
+dc_bias.py          สมการ 3 โหมด + parsing + validation (ไม่รู้จัก Flask/HTML)
+templates/index.html  ฟอร์มตามโหมด + ผลลัพธ์ + steps (Jinja)
 static/style.css    หน้าตา
 tests/              unittest (engineering + HTTP)
 docs/               design note, validation record, reflection
