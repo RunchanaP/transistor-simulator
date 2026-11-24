@@ -5,7 +5,11 @@
 - `dc_bias.py` owns every equation, every unit conversion, and every validation rule.
   It must not import Flask, Jinja, or anything HTTP.
 - `app.py` owns routing and display formatting only. No physics arithmetic here.
-- `templates/` owns presentation. It must never contain a physics equation.
+- `spice_engine.py` owns SPICE configuration, input parsing, netlist construction,
+  ngspice execution, output parsing, and server-side SVG chart rendering.
+  It must not import Flask, Jinja, or anything HTTP.
+- `templates/` owns presentation. It must never contain a physics equation or a
+  fabricated SPICE number/trace.
 - `static/style.css` owns appearance. No external fonts, CDNs, or JS.
 - `dc_bias.py` solves three Lab 03 circuits with shared region logic:
   `solve_dc_bias()` (Thevenin, `IB = (VTH − VBE) / (RTH + (β+1)·RE)`),
@@ -39,11 +43,25 @@
 11. An unknown or missing `mode` must raise a validation error — never silently default
     to Divider.
 12. Reference/expected values come from the student's independent hand calculation,
-    never from the program's output.
+    never from the program's output. This applies to Lab 04 acceptance B1–B8 as well:
+    the agent records observations only and must not assign PASS/FAIL before the
+    student supplies the expected values.
+13. SPICE is limited to the Lab 04 voltage-divider CE amplifier reference circuit
+    with real `.op`, `.ac`, and `.tran` runs. The three Lab 03 analytical modes stay
+    unchanged and remain the default when `analysis` is absent; an explicit unknown
+    `analysis` must raise a validation error.
+14. Never fabricate a SPICE number, trace, plot, or model. Every displayed SPICE
+    value and chart array must be parsed from actual ngspice output by `spice_engine.py`.
+    B2–B6 stay `NOT RUN · รอโมเดลจากอาจารย์` while `NGSPICE_MODEL` is unset.
+15. The BJT model must come from the Instructor Starter Kit via `NGSPICE_MODEL`.
+    There is no default, guessed, or bundled model file; missing model is a readable
+    Thai error, not a silent substitution.
 
 ## Scope
 
-This app covers the three Lab 03 DC bias topologies only: Fixed Bias, single-supply
-Emitter Bias, and Voltage-Divider Bias. Do not add AC analysis, Bode plots,
-transient simulation, other bias topologies, or a SPICE solver without an explicit
-new specification.
+This app covers the three Lab 03 DC bias topologies (Fixed Bias, single-supply
+Emitter Bias, and Voltage-Divider Bias) plus the explicit Lab 04 extension: ngspice
+DC operating point, AC Bode, and transient simulation of the voltage-divider CE
+amplifier with server-side SVG charts and provenance. Do not add AC analysis, Bode
+plots, transient simulation, other bias topologies, or a SPICE solver beyond that
+Lab 04 specification without a new explicit specification.

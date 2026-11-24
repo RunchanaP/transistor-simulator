@@ -3,15 +3,24 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>BJT DC Bias Calculator — {% if mode == 'fixed' %}Fixed Bias{% elif mode == 'emitter' %}Emitter Bias{% else %}Voltage-Divider Bias{% endif %}</title>
+  <title>{% if analysis == 'analytical' %}BJT DC Bias Calculator{% else %}BJT CE Amplifier Simulator{% endif %} — {% if analysis != 'analytical' %}SPICE {{ analysis|upper }}{% elif mode == 'fixed' %}Fixed Bias{% elif mode == 'emitter' %}Emitter Bias{% else %}Voltage-Divider Bias{% endif %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 <div class="card">
   <header class="card-header">
-    <h1>BJT DC Bias Calculator</h1>
-    <p>{% if mode == 'fixed' %}Fixed Bias{% elif mode == 'emitter' %}Emitter Bias · Single Supply{% else %}Voltage-Divider Bias{% endif %} · NPN Common Emitter</p>
+    <h1>{% if analysis == 'analytical' %}BJT DC Bias Calculator{% else %}BJT CE Amplifier Simulator{% endif %}</h1>
+    <p>{% if analysis != 'analytical' %}Voltage-Divider CE Amplifier · ngspice {{ analysis|upper }}{% elif mode == 'fixed' %}Fixed Bias{% elif mode == 'emitter' %}Emitter Bias · Single Supply{% else %}Voltage-Divider Bias{% endif %} · NPN Common Emitter</p>
   </header>
+
+  {% if analysis != 'analytical' %}
+  <div class="spice-status" role="status">
+    <span class="status-pill">{{ status }}</span>
+    <span class="badge">ngspice</span>
+    <span>engine: {{ engine.version }}</span>
+    <span>model: {{ engine.model }}</span>
+  </div>
+  {% endif %}
 
   {% if mode == 'fixed' %}
   <figure class="schematic" aria-hidden="true">
@@ -121,7 +130,7 @@
   </figure>
   {% endif %}
 
-  <div class="layout{% if result %} layout--result{% endif %}">
+  <div class="layout{% if result or spice_result %} layout--result{% endif %}">
     <section>
       <h2>พารามิเตอร์วงจร</h2>
 
@@ -136,6 +145,16 @@
       {% endif %}
 
       <form method="post" novalidate>
+        <div class="field mode-field analysis-field">
+          <label for="analysis">Analysis</label>
+          <select id="analysis" name="analysis">
+            <option value="analytical"{% if analysis == 'analytical' %} selected{% endif %}>Analytical (Lab 03)</option>
+            <option value="dc"{% if analysis == 'dc' %} selected{% endif %}>SPICE · DC (.op)</option>
+            <option value="ac"{% if analysis == 'ac' %} selected{% endif %}>SPICE · AC Bode</option>
+            <option value="tran"{% if analysis == 'tran' %} selected{% endif %}>SPICE · Transient</option>
+          </select>
+        </div>
+        {% if analysis == 'analytical' %}
         <div class="field mode-field">
           <label for="mode">วงจร</label>
           <select id="mode" name="mode">
@@ -193,12 +212,78 @@
 
         <button class="btn" type="submit">Calculate DC Bias</button>
         <a class="reset" href="{{ url_for('index') }}">ใช้ค่าตัวอย่าง</a>
+        {% else %}
+        <fieldset class="field-group">
+          <legend>DC bias network</legend>
+          <div class="field">
+            <label for="vcc">VCC</label>
+            <input id="vcc" name="vcc" value="{{ spice_values.vcc }}" inputmode="decimal" autocomplete="off">
+            <span class="unit">V</span>
+          </div>
+          <div class="field">
+            <label for="r1">R1</label>
+            <input id="r1" name="r1" value="{{ spice_values.r1 }}" inputmode="decimal" autocomplete="off">
+            <span class="unit">Ω</span>
+          </div>
+          <div class="field">
+            <label for="r2">R2</label>
+            <input id="r2" name="r2" value="{{ spice_values.r2 }}" inputmode="decimal" autocomplete="off">
+            <span class="unit">Ω</span>
+          </div>
+          <div class="field">
+            <label for="rc">RC</label>
+            <input id="rc" name="rc" value="{{ spice_values.rc }}" inputmode="decimal" autocomplete="off">
+            <span class="unit">Ω</span>
+          </div>
+          <div class="field">
+            <label for="re">RE</label>
+            <input id="re" name="re" value="{{ spice_values.re }}" inputmode="decimal" autocomplete="off">
+            <span class="unit">Ω</span>
+          </div>
+        </fieldset>
+        <fieldset class="field-group">
+          <legend>Coupling + source</legend>
+          <div class="field">
+            <label for="rl">RL</label>
+            <input id="rl" name="rl" value="{{ spice_values.rl }}" inputmode="decimal" autocomplete="off">
+            <span class="unit">Ω</span>
+          </div>
+          <div class="field">
+            <label for="cin">Cin</label>
+            <input id="cin" name="cin" value="{{ spice_values.cin }}" inputmode="decimal" autocomplete="off">
+            <span class="unit">µF</span>
+          </div>
+          <div class="field">
+            <label for="cout">Cout</label>
+            <input id="cout" name="cout" value="{{ spice_values.cout }}" inputmode="decimal" autocomplete="off">
+            <span class="unit">µF</span>
+          </div>
+          <div class="field">
+            <label for="amplitude">Amplitude</label>
+            <input id="amplitude" name="amplitude" value="{{ spice_values.amplitude }}" inputmode="decimal" autocomplete="off">
+            <span class="unit">mV</span>
+          </div>
+          <div class="field">
+            <label for="frequency">Frequency</label>
+            <input id="frequency" name="frequency" value="{{ spice_values.frequency }}" inputmode="decimal" autocomplete="off">
+            <span class="unit">kHz</span>
+          </div>
+        </fieldset>
+
+        <button class="btn" type="submit">Run SPICE</button>
+        <a class="reset" href="{{ url_for('index') }}">ใช้ค่าตัวอย่าง</a>
+        {% endif %}
       </form>
 
+      {% if analysis == 'analytical' %}
       <p class="hint">ใส่ k หรือ M ได้ เช่น <strong>100k</strong>, <strong>1M</strong> · ไม่ใส่หน่วย = Ω · ค่าตัวอย่าง: VCC {{ sample.vcc }} V, RC {{ sample.rc }} Ω, β {{ sample.beta }}, VBE {{ sample.vbe }} V{% if mode == 'fixed' %}, RB {{ sample.rb }} Ω{% elif mode == 'emitter' %}, RB {{ sample.rb }} Ω, RE {{ sample.re }} Ω{% else %}, R1 {{ sample.r1 }} Ω, R2 {{ sample.r2 }} Ω, RE {{ sample.re }} Ω{% endif %}</p>
+      {% else %}
+      <p class="hint"> resistance ใส่ k หรือ M ได้ · capacitor เป็น µF · amplitude เป็น mV · frequency เป็น kHz · ค่าตัวอย่าง: VCC {{ spice_values.vcc }} V, R1 {{ spice_values.r1 }} Ω, R2 {{ spice_values.r2 }} Ω, RC {{ spice_values.rc }} Ω, RE {{ spice_values.re }} Ω, RL {{ spice_values.rl }} Ω, Cin {{ spice_values.cin }} µF, Cout {{ spice_values.cout }} µF, Amplitude {{ spice_values.amplitude }} mV, Frequency {{ spice_values.frequency }} kHz</p>
+      {% endif %}
     </section>
 
     <section>
+      {% if analysis == 'analytical' %}
       <h2>ผลการคำนวณ DC Bias</h2>
 
       {% if result %}
@@ -276,10 +361,58 @@ VCE = VC − VE                  = {{ '%.3f'|format(result.vce) }} V{% endif %}{
       {% else %}
       <p class="hint">กรอกค่าพารามิเตอร์แล้วกด <strong>Calculate DC Bias</strong> เพื่อดูผล</p>
       {% endif %}
+      {% else %}
+      <h2>ผลการจำลอง SPICE</h2>
+      {% if spice_result %}
+      <p class="spice-note">แหล่งข้อมูล: ngspice {{ spice_result.engine_version }} · BJT model {{ spice_result.model_name }} · analysis {{ spice_result.analysis }}</p>
+      {% if spice_result.demo %}
+      <p class="spice-note">⚠ โมเดลเดโมชั่วคราว — ไม่ใช่โมเดลจาก Instructor Starter Kit · ห้ามใช้ผลนี้เป็นหลักฐาน B2–B6</p>
+      {% endif %}
+      <p class="spice-note">จุดวัด: Vin = base หลัง Cin · Vout = collector หลัง Cout บน RL · IC = กระแสผ่าน RC (วัดด้วย probe VRC)</p>
+      {% if spice_result.op and spice_result.op.warnings %}
+      <ul class="notes">
+        {% for note in spice_result.op.warnings %}<li>{{ note }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+      {% if spice_result.op %}
+      <table class="spice-table">
+        <tbody>
+          <tr><th>VB</th><td class="num">{{ '%.3f'|format(spice_result.op.vb) }}</td><td class="unit">V</td></tr>
+          <tr><th>VE</th><td class="num">{{ '%.3f'|format(spice_result.op.ve) }}</td><td class="unit">V</td></tr>
+          <tr><th>VC</th><td class="num">{{ '%.3f'|format(spice_result.op.vc) }}</td><td class="unit">V</td></tr>
+          <tr><th>VCE</th><td class="num">{{ '%.3f'|format(spice_result.op.vce) }}</td><td class="unit">V</td></tr>
+          <tr><th>IC</th><td class="num">{{ '%.3f'|format(spice_result.op.ic * 1000) }}</td><td class="unit">mA</td></tr>
+        </tbody>
+      </table>
+      {% endif %}
+      {% if spice_result.ac %}
+      <table class="spice-table">
+        <tbody>
+          <tr><th>fL</th>{% if spice_result.ac.f_low is not none %}<td class="num">{{ '%.3g'|format(spice_result.ac.f_low) }}</td><td class="unit">Hz</td>{% else %}<td class="num" colspan="2">not determined in sweep range</td>{% endif %}</tr>
+          <tr><th>fH</th>{% if spice_result.ac.f_high is not none %}<td class="num">{{ '%.3g'|format(spice_result.ac.f_high) }}</td><td class="unit">Hz</td>{% else %}<td class="num" colspan="2">not determined in sweep range</td>{% endif %}</tr>
+        </tbody>
+      </table>
+      <figure class="chart">
+        <figcaption>Bode — Gain (dB), Phase (°), Frequency (Hz)</figcaption>
+        {{ bode_svg|safe }}
+      </figure>
+      {% endif %}
+      {% if spice_result.tran %}
+      <figure class="chart">
+        <figcaption>Transient — Vin/Vout (V), Time (ms){% if spice_result.tran.inverted %} · inverted{% endif %}</figcaption>
+        {{ wave_svg|safe }}
+      </figure>
+      {% endif %}
+      {% else %}
+      <p class="hint">เลือก Analysis เป็น SPICE แล้วกด <strong>Run SPICE</strong> เพื่อดูผลจาก ngspice</p>
+      {% endif %}
+      {% endif %}
     </section>
   </div>
 
-  {% if mode == 'divider' %}
+  {% if analysis != 'analytical' %}
+  <p class="assumptions">แบบจำลอง: ผลลัพธ์อ่านจาก ngspice {{ engine.version }} ด้วย BJT model {{ engine.model }} · voltage-divider CE amplifier · ไม่มีค่าที่สร้างขึ้นเอง</p>
+  {% elif mode == 'divider' %}
   <p class="assumptions">แบบจำลอง: คิดกระแสเบสผ่าน Thevenin (RTH, VTH) · β คงที่ · VBE คงที่ · Forward-Active — ผลที่ได้ใช้ได้เฉพาะเมื่อวงจรอยู่ในช่วง Active</p>
   {% else %}
   <p class="assumptions">แบบจำลอง: β คงที่ · VBE คงที่ · Forward-Active — ผลที่ได้ใช้ได้เฉพาะเมื่อวงจรอยู่ในช่วง Active</p>
